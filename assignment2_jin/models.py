@@ -105,7 +105,7 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
 
         self.output = nn.Linear(self.hidden_size, self.vocab_size)
 
-        self.init_weights()
+        # self.init_weights()
 
     def init_weights(self):
         # ========================
@@ -457,14 +457,7 @@ class MultiHeadedAttention(nn.Module):
         for nm, param in self.named_parameters():
             if param.requires_grad:
                 k = 1.0 / math.sqrt(param.size(0))
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(param)
-                print(k, fan_in)
-                print(1.0 / k**2, nm, param.size())
-                print(param.data.mean())
                 nn.init.uniform_(param, -k, k)
-                print(param.data.mean())
-                import sys
-                sys.exit(0)
 
     def forward(self, query, key, value, mask=None):
         # TODO: implement the masked multi-head attention.
