@@ -51,8 +51,7 @@ class RNNCell(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, inp, hidden):
-        hid = self.xh(inp) + self.hh(hidden)
-        hid = hid.sigmoid()
+        hid = torch.tanh(self.xh(inp) + self.hh(hidden))
         outp = self.dropout(hid)
         return outp, hid
 
@@ -105,7 +104,7 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
 
         self.output = nn.Linear(self.hidden_size, self.vocab_size)
 
-        # self.init_weights()
+        self.init_weights()
 
     def init_weights(self):
         # ========================
@@ -123,7 +122,7 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
             if param.requires_grad:
                 k = 1.0 / math.sqrt(param.shape[0])
                 nn.init.uniform_(param, -k, k)
-                print(k)
+                print(nm, param.shape)
 
 
     def init_hidden(self):
@@ -458,6 +457,7 @@ class MultiHeadedAttention(nn.Module):
             if param.requires_grad:
                 k = 1.0 / math.sqrt(param.size(0))
                 nn.init.uniform_(param, -k, k)
+                print(nm, '\t', param.size())
 
     def forward(self, query, key, value, mask=None):
         # TODO: implement the masked multi-head attention.
@@ -490,7 +490,7 @@ class MultiHeadedAttention(nn.Module):
         # batch_size, self.n_heads, seq_len, self.d_k
         weighted_value = torch.matmul(score, value)
         # batch_size, self.n_heads, seq_len, self.n_units
-        weighted_value = weighted_value.transpose(1, 2).contiguous().view(batch_size, -1, self.n_heads*self.d_k)
+        weighted_value = weighted_value.transpose(1, 2).contiguous().view(batch_size, -1, self.n_heads * self.d_k)
 
         # return self.outp_transform(weighted_value)
         return self.attn_transform[-1](weighted_value)
