@@ -26,13 +26,13 @@ import matplotlib.pyplot as plt
 #
 # You should not modify the interals of the Transformer
 # except where indicated to implement the multi-head
-# attention. 
+# attention.
 
 
 def clones(module, N):
     """
     A helper function for producing N identical layers (each with their own parameters).
-    
+
     inputs: 
         module: a pytorch nn.module
         N (int): the number of copies of that module to return
@@ -46,12 +46,12 @@ def clones(module, N):
 class RNNCell(nn.Module):
     def __init__(self, input_size, hidden_size, dropout=0.1):
         super(RNNCell, self).__init__()
-        self.linear1 = nn.Linear(input_size, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.xh = nn.Linear(input_size, hidden_size)
+        self.hh = nn.Linear(hidden_size, hidden_size, bias=False)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, inp, hidden):
-        hid = self.linear1(inp) + self.linear2(hidden)
+        hid = self.xh(inp) + self.hh(hidden)
         hid = hid.sigmoid()
         outp = self.dropout(hid)
         return outp, hid
@@ -85,6 +85,8 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
         # for Pytorch to recognize these parameters as belonging to this nn.Module
         # and compute their gradients automatically. You're not obligated to use the
         # provided clones function.
+
+        # ---- MY CODE STARTS HERE ----
         self.emb_size = emb_size
         self.hidden_size = hidden_size
         self.seq_len = seq_len
@@ -111,16 +113,17 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
         # and output biases to 0 (in place). The embeddings should not use a bias vector.
         # Initialize all other (i.e. recurrent and linear) weights AND biases uniformly
         # in the range [-k, k] where k is the square root of 1/hidden_size
+
+        # ---- MY CODE STARTS HERE ----
         nn.init.uniform_(self.embed.weight, -0.1, 0.1)
         nn.init.uniform_(self.output.weight, -0.1, 0.1)
         nn.init.constant_(self.output.bias, 0)
 
-        k = math.sqrt(1 / self.hidden_size)
-
-        hidden_params = filter(lambda p: p.requires_grad, self.hiddens.parameters())
-
-        for param in hidden_params:
-            nn.init.uniform_(param, -k, k)
+        for nm, param in self.hiddens.named_parameters():
+            if param.requires_grad:
+                k = 1.0 / math.sqrt(param.shape[0])
+                nn.init.uniform_(param, -k, k)
+                print(k)
 
 
     def init_hidden(self):
@@ -129,6 +132,8 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
         """
         This is used for the first mini-batch in an epoch, only.
         """
+
+        # ---- MY CODE STARTS HERE ----
         return torch.zeros((self.num_layers, self.batch_size, self.hidden_size))
 
     def forward(self, inputs, hidden):
@@ -167,14 +172,17 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
                   if you are curious.
                         shape: (num_layers, batch_size, hidden_size)
         """
+
+        # ---- MY CODE STARTS HERE ----
         res, new_hid = [], []
         for t in range(inputs.shape[0]):
             outp = self.embed_dropout(self.embed(inputs[t]))
 
             for l, layer in enumerate(self.hiddens):
                 outp, hid = layer(outp, hidden[l])
-                new_hid.append(hid)
+                new_hid.append(hid.unsqueeze(0))
             hidden = torch.cat(new_hid, 0)
+            new_hid = []
 
             outp = self.output(outp)
             res.append(outp)
@@ -207,8 +215,9 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
             - Sampled sequences of tokens
                         shape: (generated_seq_len, batch_size)
         """
-        input = input.unsqueeze(0)
-        samples = [input]
+
+        # ---- MY CODE STARTS HERE ----
+        samples = [input.unsqueeze(0)]
         new_hid = []
         with torch.no_grad():
             for t in range(generated_seq_len):
@@ -216,14 +225,13 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
 
                 for l, layer in enumerate(self.hiddens):
                     outp, hid = layer(outp, hidden[l])
-                    new_hid.append(hid)
+                    new_hid.append(hid.unsqueeze(0))
                 hidden = torch.cat(new_hid, 0)
+                new_hid = []
 
                 outp = self.output(outp).softmax(dim=-1)
                 next_inp = torch.multinomial(outp, num_samples=1)
-                print(next_inp.shape)
-                next_inp = next_inp.unsqueeze(0)
-                samples.append(next_inp)
+                samples.append(next_inp.unsqueeze(0))
                 input = next_inp
             samples = torch.cat(samples, 0)
         return samples
@@ -234,27 +242,39 @@ class GRUCell(nn.Module):
     def __init__(self, input_size, hidden_size, dropout=0.1):
         super(GRUCell, self).__init__()
 
-        self.reset_inp = nn.Linear(input_size, hidden_size)
-        self.reset_hid = nn.Linear(hidden_size, hidden_size, bias=False)
+        # self.reset_inp = nn.Linear(input_size, hidden_size)
+        # self.reset_hid = nn.Linear(hidden_size, hidden_size, bias=False)
+        #
+        # self.forget_inp = nn.Linear(input_size, hidden_size)
+        # self.forget_hid = nn.Linear(hidden_size, hidden_size, bias=False)
+        #
+        # self.new_h_inp = nn.Linear(input_size, hidden_size)
+        # self.new_h_hid = nn.Linear(hidden_size, hidden_size, bias=False)
 
-        self.forget_inp = nn.Linear(input_size, hidden_size)
-        self.forget_hid = nn.Linear(hidden_size, hidden_size, bias=False)
-
-        self.new_h_inp = nn.Linear(input_size, hidden_size)
-        self.new_h_hid = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.xh = nn.Linear(input_size, hidden_size * 3)
+        self.hh = nn.Linear(hidden_size, hidden_size * 3, bias=False)
 
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, inp, hidden):
-        reset = torch.sigmoid(self.reset_inp(inp) + self.reset_hid(hidden))
-        forget = torch.sigmoid(self.forget_inp(inp) + self.forget_hid(hidden))
 
-        h_tild = torch.tanh(self.new_h_inp(inp) + self.new_h_hid(reset * hidden))
-
+        x_r, x_f, x_n = self.xh(inp).chunk(3, dim=1)
+        h_r, h_f, h_n = self.hh(hidden).chunk(3, dim=1)
+        reset = torch.sigmoid(x_r + h_r)
+        forget = torch.sigmoid(x_f + h_f)
+        h_tild = torch.tanh(x_n + reset * h_n)
         h = (1-forget)*hidden + forget*h_tild
 
         y = self.dropout(h)
 
+        # reset = torch.sigmoid(self.reset_inp(inp) + self.reset_hid(hidden))
+        # forget = torch.sigmoid(self.forget_inp(inp) + self.forget_hid(hidden))
+        #
+        # h_tild = torch.tanh(self.new_h_inp(inp) + self.new_h_hid(reset * hidden))
+        #
+        # h = (1-forget)*hidden + forget*h_tild
+        #
+        # y = self.dropout(h)
         return y, h
 
 
@@ -266,7 +286,8 @@ class GRU(nn.Module): # Implement a stacked GRU RNN
     def __init__(self, emb_size, hidden_size, seq_len, batch_size, vocab_size, num_layers, dp_keep_prob):
         super(GRU, self).__init__()
 
-        # TODO ========================
+        #  ========================
+        # ---- MY CODE STARTS HERE ----
         self.emb_size = emb_size
         self.hidden_size = hidden_size
         self.seq_len = seq_len
@@ -278,42 +299,44 @@ class GRU(nn.Module): # Implement a stacked GRU RNN
         self.embed = nn.Embedding(vocab_size, emb_size)
         self.embed_dropout = nn.Dropout(1-dp_keep_prob)
 
-        hiddens = [GRUCell(emb_size, hidden_size, 1-dp_keep_prob)]
+        self.hiddens = nn.ModuleList([GRUCell(emb_size, hidden_size, 1-dp_keep_prob)])
         for l in range(num_layers-1):
-            hiddens.append(GRUCell(hidden_size, hidden_size, 1-dp_keep_prob))
-        self.hiddens = nn.ModuleList(hiddens)
+            self.hiddens.append(GRUCell(hidden_size, hidden_size, 1-dp_keep_prob))
 
         self.output = nn.Linear(hidden_size, vocab_size)
 
         self.init_weights_uniform()
 
+
     def init_weights_uniform(self):
-        # TODO ========================
+        #  ========================
+        # ---- MY CODE STARTS HERE ----
         nn.init.uniform_(self.embed.weight, -0.1, 0.1)
         nn.init.uniform_(self.output.weight, -0.1, 0.1)
         nn.init.constant_(self.output.bias, 0)
 
-        k = math.sqrt(1 / self.hidden_size)
-
-        hidden_params = filter(lambda p: p.requires_grad, self.hiddens.parameters())
-
-        for param in hidden_params:
-            nn.init.uniform_(param, -k, k)
+        for nm, param in self.hiddens.named_parameters():
+            if param.requires_grad:
+                k = 1.0 / math.sqrt(param.shape[0])
+                nn.init.uniform_(param, -k, k)
 
     def init_hidden(self):
-        # TODO ========================
+        #  ========================
+        # ---- MY CODE STARTS HERE ----
         return torch.zeros((self.num_layers, self.batch_size, self.hidden_size))
 
     def forward(self, inputs, hidden):
-        # TODO ========================
+        #  ========================
+        # ---- MY CODE STARTS HERE ----
         res, new_hid = [], []
         for t in range(inputs.shape[0]):
             outp = self.embed_dropout(self.embed(inputs[t]))
 
             for l, layer in enumerate(self.hiddens):
                 outp, hid = layer(outp, hidden[l])
-                new_hid.append(hid)
+                new_hid.append(hid.unsqueeze(0))
             hidden = torch.cat(new_hid, 0)
+            new_hid = []
 
             outp = self.output(outp)
             res.append(outp)
@@ -322,9 +345,9 @@ class GRU(nn.Module): # Implement a stacked GRU RNN
         return logits.view(self.seq_len, self.batch_size, self.vocab_size), hidden
 
     def generate(self, input, hidden, generated_seq_len):
-        # TODO ========================
-        input = input.unsqueeze(0)
-        samples = [input]
+        # ========================
+        # ---- MY CODE STARTS HERE ----
+        samples = [input.unsqueeze(0)]
         new_hid = []
         with torch.no_grad():
             for t in range(generated_seq_len):
@@ -332,14 +355,13 @@ class GRU(nn.Module): # Implement a stacked GRU RNN
 
                 for l, layer in enumerate(self.hiddens):
                     outp, hid = layer(outp, hidden[l])
-                    new_hid.append(hid)
+                    new_hid.append(hid.unsqueeze(0))
                 hidden = torch.cat(new_hid, 0)
+                new_hid = []
 
                 outp = self.output(outp).softmax(dim=-1)
                 next_inp = torch.multinomial(outp, num_samples=1)
-                print(next_inp.shape)
-                next_inp = next_inp.unsqueeze(0)
-                samples.append(next_inp)
+                samples.append(next_inp.unsqueeze(0))
                 input = next_inp
             samples = torch.cat(samples, 0)
         return samples
@@ -401,117 +423,87 @@ and a linear layer followed by a softmax.
 #LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 #OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #SOFTWARE.
-#----------------------------------------------------------------------------------
-def attention(query, key, value, mask=None, dropout=None):
-    "Compute 'Scaled Dot Product Attention'"
-    d_k = query.size(-1)
-    scores = torch.matmul(query, key.transpose(-2, -1)) \
-             / math.sqrt(d_k)
-    if mask is not None:
-        scores = scores.masked_fill(mask == 0, -1e9)
-    p_attn = F.softmax(scores, dim = -1)
-    if dropout is not None:
-        p_attn = dropout(p_attn)
-    return torch.matmul(p_attn, value), p_attn
+# ----------------------------------------------------------------------------------
+# TODO: implement this class
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, h, d_model, dropout=0.1):
-        "Take in model size and number of heads."
+    def __init__(self, n_heads, n_units, dropout=0.1):
+        """
+        n_heads: the number of attention heads
+        n_units: the number of input and output units
+        dropout: probability of DROPPING units
+        """
         super(MultiHeadedAttention, self).__init__()
-        assert d_model % h == 0
-        # We assume d_v always equals d_k
-        self.d_k = d_model // h
-        self.h = h
-        self.linears = clones(nn.Linear(d_model, d_model), 4)
-        self.attn = None
+        # This sets the size of the keys, values, and queries (self.d_k) to all
+        # be equal to the number of output units divided by the number of heads.
+        self.d_k = n_units // n_heads
+        # This requires the number of n_heads to evenly divide n_units.
+        assert n_units % n_heads == 0
+        self.n_units = n_units
+
+        # TODO: create/initialize any necessary parameters or layers
+        # Initialize all weights and biases uniformly in the range [-k, k],
+        # where k is the square root of 1/n_units.
+        # Note: the only Pytorch modules you are allowed to use are nn.Linear
+        # and nn.Dropout
+        # ETA: you can also use softmax
+        # ETA: you can use the "clones" function we provide.
+
+        # ---- MY CODE STARTS HERE ----
+        self.n_heads = n_heads
+        self.attn_transform = clones(nn.Linear(self.n_units, self.n_units), 4)
+        # self.outp_transform = nn.Linear(self.n_units, self.n_units)
         self.dropout = nn.Dropout(p=dropout)
 
-        k = 1 / math.sqrt(d_model)
-        for param in filter(lambda p: p.requires_grad, self.parameters()):
-            nn.init.uniform_(param, -k, k)
+        for nm, param in self.named_parameters():
+            if param.requires_grad:
+                k = 1.0 / math.sqrt(param.size(0))
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(param)
+                print(k, fan_in)
+                print(1.0 / k**2, nm, param.size())
+                print(param.data.mean())
+                nn.init.uniform_(param, -k, k)
+                print(param.data.mean())
+                import sys
+                sys.exit(0)
 
     def forward(self, query, key, value, mask=None):
-        "Implements Figure 2"
+        # TODO: implement the masked multi-head attention.
+        # query, key, and value correspond to Q, K, and V in the latex, and
+        # they all have size: (batch_size, seq_len, self.n_units)
+        # mask has size: (batch_size, seq_len, seq_len)
+        # As described in the .tex, apply input masking to the softmax
+        # generating the "attention values" (i.e. A_i in the .tex)
+        # Also apply dropout to the attention values.
+
+        # ---- MY CODE STARTS HERE ----
+
+        batch_size = query.shape[0]
+
+        query, key, value = [linear(x).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2) \
+                             for x, linear in zip((query, key, value), self.attn_transform)]  # batch_size, n_heads, seq_len, self.d_k
+
+        # scaled self attention
+        # batch_size, n_heads, seq_len, seq_len
+        score = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(self.d_k)
+
         if mask is not None:
-            # Same mask applied to all h heads.
+            # batch_size, 1, seq_len, seq_len
             mask = mask.unsqueeze(1)
-        nbatches = query.size(0)
+            score = score.masked_fill(mask == 0, -1e9)
 
-        # 1) Do all the linear projections in batch from d_model => h x d_k
-        query, key, value = \
-            [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
-             for l, x in zip(self.linears, (query, key, value))]
+        score = F.softmax(score, dim=-1)
+        score = self.dropout(score)
 
-        # 2) Apply attention on all the projected vectors in batch.
-        x, self.attn = attention(query, key, value, mask=mask,
-                                 dropout=self.dropout)
+        # batch_size, self.n_heads, seq_len, self.d_k
+        weighted_value = torch.matmul(score, value)
+        # batch_size, self.n_heads, seq_len, self.n_units
+        weighted_value = weighted_value.transpose(1, 2).contiguous().view(batch_size, -1, self.n_heads*self.d_k)
 
-        # 3) "Concat" using a view and apply a final linear.
-        x = x.transpose(1, 2).contiguous() \
-            .view(nbatches, -1, self.h * self.d_k)
-        return self.linears[-1](x)
-# TODO: implement this class
-# class MultiHeadedAttention(nn.Module):
-#     def __init__(self, n_heads, n_units, dropout=0.1):
-#         """
-#         n_heads: the number of attention heads
-#         n_units: the number of output units
-#         dropout: probability of DROPPING units
-#         """
-#         super(MultiHeadedAttention, self).__init__()
-#         # This sets the size of the keys, values, and queries (self.d_k) to all
-#         # be equal to the number of output units divided by the number of heads.
-#         self.d_k = n_units // n_heads
-#         # This requires the number of n_heads to evenly divide n_units.
-#         assert n_units % n_heads == 0
-#         self.n_units = n_units
-#
-#         # TODO: create/initialize any necessary parameters or layers
-#         # Initialize all weights and biases uniformly in the range [-k, k],
-#         # where k is the square root of 1/n_units.
-#         # Note: the only Pytorch modules you are allowed to use are nn.Linear
-#         # and nn.Dropout
-#         self.n_heads = n_heads
-#         self.attn_transform = clones(nn.Linear(self.n_units, self.n_units), 3)
-#         self.outp_transform = nn.Linear(self.n_units, self.n_units)
-#         self.dropout = nn.Dropout(dropout)
-#
-#         k = 1 / math.sqrt(n_units)
-#         for param in self.parameters():
-#             nn.init.uniform_(param, -k, k)
-#
-#     def forward(self, query, key, value, mask=None):
-#         # TODO: implement the masked multi-head attention.
-#         # query, key, and value all have size: (batch_size, seq_len, self.n_units)
-#         # mask has size: (batch_size, seq_len, seq_len)
-#         # As described in the .tex, apply input masking to the softmax
-#         # generating the "attention values" (i.e. A_i in the .tex)
-#         # Also apply dropout to the attention values.
-#
-#         batch_size, seq_len, _ = query.shape
-#
-#         query, key, value = [linear(x) for x, linear in zip((query, key, value), self.attn_transform)]
-#         query, key, value = [x.view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
-#                              for x in (query, key, value)]     # batch_size, n_heads, seq_len, self.d_k
-#
-#         # scaled self attention
-#         # batch_size, n_heads, seq_len, seq_len
-#         score_pre_softmax = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(self.d_k)
-#
-#         if mask is not None:
-#             # batch_size, 1, seq_len, seq_len
-#             mask = mask.unsqueeze(1)
-#             score_pre_softmax = score_pre_softmax.masked_fill(mask == 0, -1e9)
-#
-#         score = F.softmax(score_pre_softmax, dim=-1)
-#         score = self.dropout(score)
-#
-#         # batch_size, self.n_heads, seq_len, self.d_k
-#         weighted_value = torch.matmul(score, value)
-#         # batch_size, self.n_heads, seq_len, self.n_units
-#         weighted_value = weighted_value.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
-#         res = self.outp_transform(weighted_value)
-#         return res
-#----------------------------------------------------------------------------------
+        # return self.outp_transform(weighted_value)
+        return self.attn_transform[-1](weighted_value)
+
+
+# ----------------------------------------------------------------------------------
 # The encodings of elements of the input sequence
 
 class WordEmbedding(nn.Module):
@@ -521,7 +513,7 @@ class WordEmbedding(nn.Module):
         self.n_units = n_units
 
     def forward(self, x):
-        #print (x)
+        # print (x)
         return self.lut(x) * math.sqrt(self.n_units)
 
 
@@ -529,7 +521,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, n_units, dropout, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
-        
+
         # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, n_units)
         position = torch.arange(0, max_len).unsqueeze(1).float()
@@ -539,15 +531,14 @@ class PositionalEncoding(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
-        
+
     def forward(self, x):
-        x = x + Variable(self.pe[:, :x.size(1)], 
+        x = x + Variable(self.pe[:, :x.size(1)],
                          requires_grad=False)
         return self.dropout(x)
 
 
-
-#----------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
 # The TransformerBlock and the full Transformer
 
 
@@ -558,21 +549,22 @@ class TransformerBlock(nn.Module):
         self.self_attn = self_attn
         self.feed_forward = feed_forward
         self.sublayer = clones(ResidualSkipConnectionWithLayerNorm(size, dropout), 2)
- 
+
     def forward(self, x, mask):
-        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask)) # apply the self-attention
-        return self.sublayer[1](x, self.feed_forward) # apply the position-wise MLP
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))  # apply the self-attention
+        return self.sublayer[1](x, self.feed_forward)  # apply the position-wise MLP
 
 
 class TransformerStack(nn.Module):
     """
     This will be called on the TransformerBlock (above) to create a stack.
     """
-    def __init__(self, layer, n_blocks): # layer will be TransformerBlock (below)
+
+    def __init__(self, layer, n_blocks):  # layer will be TransformerBlock (below)
         super(TransformerStack, self).__init__()
         self.layers = clones(layer, n_blocks)
         self.norm = LayerNorm(layer.size)
-        
+
     def forward(self, x, mask):
         for layer in self.layers:
             x = layer(x, mask)
@@ -585,13 +577,13 @@ class FullTransformer(nn.Module):
         self.transformer_stack = transformer_stack
         self.embedding = embedding
         self.output_layer = nn.Linear(n_units, vocab_size)
-        
+
     def forward(self, input_sequence, mask):
         embeddings = self.embedding(input_sequence)
         return F.log_softmax(self.output_layer(self.transformer_stack(embeddings, mask)), dim=-1)
 
 
-def make_model(vocab_size, n_blocks=6, 
+def make_model(vocab_size, n_blocks=6,
                n_units=512, n_heads=16, dropout=0.1):
     "Helper: Construct a model from hyperparameters."
     c = copy.deepcopy
@@ -603,8 +595,8 @@ def make_model(vocab_size, n_blocks=6,
         embedding=nn.Sequential(WordEmbedding(n_units, vocab_size), c(position)),
         n_units=n_units,
         vocab_size=vocab_size
-        )
-    
+    )
+
     # Initialize parameters with Glorot / fan_avg.
     for p in model.parameters():
         if p.dim() > 1:
@@ -612,7 +604,7 @@ def make_model(vocab_size, n_blocks=6,
     return model
 
 
-#----------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
 # Data processing
 
 def subsequent_mask(size):
@@ -621,12 +613,14 @@ def subsequent_mask(size):
     subsequent_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
     return torch.from_numpy(subsequent_mask) == 0
 
+
 class Batch:
     "Object for holding a batch of data with mask during training."
+
     def __init__(self, x, pad=0):
         self.data = x
         self.mask = self.make_mask(self.data, pad)
-    
+
     @staticmethod
     def make_mask(data, pad):
         "Create a mask to hide future words."
