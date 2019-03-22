@@ -219,7 +219,7 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
         samples = [input.unsqueeze(0)]
         new_hid = []
         with torch.no_grad():
-            for t in range(generated_seq_len):
+            for t in range(30+generated_seq_len):
                 outp = self.embed_dropout(self.embed(input))
                 for l, layer in enumerate(self.hiddens):
                     outp, hid = layer(outp, hidden[l])
@@ -227,11 +227,12 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
                 hidden = torch.cat(new_hid, 0)
                 new_hid = []
 
-                outp = self.output(outp).softmax(dim=-1)
+                outp = self.output(outp)
+                outp = F.softmax(outp/10, dim=-1)
                 next_inp = torch.multinomial(outp, num_samples=1).squeeze()
                 samples.append(next_inp.unsqueeze(0))
                 input = next_inp
-            samples = torch.cat(samples, 0)
+            samples = torch.cat(samples[31:], 0)
         return samples
 
 
@@ -348,7 +349,7 @@ class GRU(nn.Module): # Implement a stacked GRU RNN
         samples = [input.unsqueeze(0)]
         new_hid = []
         with torch.no_grad():
-            for t in range(generated_seq_len):
+            for t in range(30+generated_seq_len):
                 outp = self.embed_dropout(self.embed(input))
                 for l, layer in enumerate(self.hiddens):
                     outp, hid = layer(outp, hidden[l])
@@ -356,11 +357,12 @@ class GRU(nn.Module): # Implement a stacked GRU RNN
                 hidden = torch.cat(new_hid, 0)
                 new_hid = []
 
-                outp = self.output(outp).softmax(dim=-1)
+                outp = self.output(outp)
+                outp = F.softmax(outp/10, dim=-1)
                 next_inp = torch.multinomial(outp, num_samples=1).squeeze()
                 samples.append(next_inp.unsqueeze(0))
                 input = next_inp
-            samples = torch.cat(samples, 0)
+            samples = torch.cat(samples[31:], 0)
         return samples
 
 
