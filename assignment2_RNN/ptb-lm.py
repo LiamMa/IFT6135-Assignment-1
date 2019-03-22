@@ -501,3 +501,12 @@ np.save(lc_path, {'train_ppls': train_ppls,
 # To load these, run
 # >>> x = np.load(lc_path)[()]
 # You will need these values for plotting learning curves (Problem 4)
+
+def generate_samples(model, gen_length):
+    with open('given_sample.txt') as f:
+        given = f.readlines()
+
+    given = [word_to_id[w] for w in given if w in word_to_id]
+    print(given)
+
+

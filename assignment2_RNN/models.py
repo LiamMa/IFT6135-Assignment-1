@@ -221,7 +221,6 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
         with torch.no_grad():
             for t in range(generated_seq_len):
                 outp = self.embed_dropout(self.embed(input))
-
                 for l, layer in enumerate(self.hiddens):
                     outp, hid = layer(outp, hidden[l])
                     new_hid.append(hid.unsqueeze(0))
@@ -229,7 +228,7 @@ class RNN(nn.Module): # Implement a stacked vanilla RNN with Tanh nonlinearities
                 new_hid = []
 
                 outp = self.output(outp).softmax(dim=-1)
-                next_inp = torch.multinomial(outp, num_samples=1)
+                next_inp = torch.multinomial(outp, num_samples=1).squeeze()
                 samples.append(next_inp.unsqueeze(0))
                 input = next_inp
             samples = torch.cat(samples, 0)
@@ -351,7 +350,6 @@ class GRU(nn.Module): # Implement a stacked GRU RNN
         with torch.no_grad():
             for t in range(generated_seq_len):
                 outp = self.embed_dropout(self.embed(input))
-
                 for l, layer in enumerate(self.hiddens):
                     outp, hid = layer(outp, hidden[l])
                     new_hid.append(hid.unsqueeze(0))
@@ -359,7 +357,7 @@ class GRU(nn.Module): # Implement a stacked GRU RNN
                 new_hid = []
 
                 outp = self.output(outp).softmax(dim=-1)
-                next_inp = torch.multinomial(outp, num_samples=1)
+                next_inp = torch.multinomial(outp, num_samples=1).squeeze()
                 samples.append(next_inp.unsqueeze(0))
                 input = next_inp
             samples = torch.cat(samples, 0)
@@ -456,8 +454,9 @@ class MultiHeadedAttention(nn.Module):
         for nm, param in self.named_parameters():
             if param.requires_grad:
                 k = 1.0 / math.sqrt(param.size(0))
+                # print('before', param.min().item(), param.max().item(), param.mean().item())
                 nn.init.uniform_(param, -k, k)
-                print(nm, '\t', param.size())
+                # print('after', param.min().item(), param.max().item(), param.mean().item())
 
     def forward(self, query, key, value, mask=None):
         # TODO: implement the masked multi-head attention.
@@ -473,7 +472,8 @@ class MultiHeadedAttention(nn.Module):
         batch_size = query.shape[0]
 
         query, key, value = [linear(x).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2) \
-                             for x, linear in zip((query, key, value), self.attn_transform)]  # batch_size, n_heads, seq_len, self.d_k
+                             for x, linear in zip((query, key, value), self.attn_transform)]
+        # batch_size, n_heads, seq_len, self.d_k
 
         # scaled self attention
         # batch_size, n_heads, seq_len, seq_len
@@ -490,7 +490,8 @@ class MultiHeadedAttention(nn.Module):
         # batch_size, self.n_heads, seq_len, self.d_k
         weighted_value = torch.matmul(score, value)
         # batch_size, self.n_heads, seq_len, self.n_units
-        weighted_value = weighted_value.transpose(1, 2).contiguous().view(batch_size, -1, self.n_heads * self.d_k)
+        weighted_value = weighted_value.transpose(1, 2).contiguous().view(
+            batch_size, -1, self.n_heads * self.d_k)
 
         # return self.outp_transform(weighted_value)
         return self.attn_transform[-1](weighted_value)
