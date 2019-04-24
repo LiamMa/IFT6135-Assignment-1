@@ -1,5 +1,5 @@
 # IFT6135-Assignment
-> Jin Dong: jin.dong@mail.mcgill.ca
+> Jin Dong: jin.dong@mail.mcgill.ca;
 > Liheng Ma: liheng.ma@mail.mcgill.ca
 
 This is the assignment codebase for the IFT-6135: Learning Representation (Deep Learning) class taught by Prof Aaron C at the UdeM.
