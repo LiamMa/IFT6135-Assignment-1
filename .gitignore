@@ -1,5 +1,9 @@
-*.DS_Store*
-*.idea*
+*.DS_Store/*
+assignment3_VAE_GAN/P2/data/*
+assignment3_VAE_GAN/P3/data/*
+*.idea/*
+*__pycache__*
+.DS_Store/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
